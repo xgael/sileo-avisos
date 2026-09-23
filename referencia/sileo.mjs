@@ -42,6 +42,12 @@ const APP = {
     await Promise.all([p.waitForEvent('download'), p.getByRole('button', { name: 'Descargar plantilla (.xlsx)' }).click()])
   },
   titulosPromesa: ['Generando plantilla…', 'Plantilla descargada'],
+  /** Un aviso en vivo (evento que no disparó la persona), que debe sonar. `null` = no aplica. */
+  avisoEnVivo: async (p) => { await p.getByRole('button', { name: 'Simular aviso en vivo' }).click() },
+  /** Apaga el sonido desde la interfaz. */
+  apagarSonido: async (p) => { await p.getByLabel('Sonido de avisos').uncheck() },
+  sonido: /sileo-gota\.mp3$/,
+  volumen: 0.4,
   duracionDeshacer: 10_000,
 }
 // ────────────────────────────────────────────────────────────────────────────
@@ -191,6 +197,34 @@ if (APP.promesa) {
   clearInterval(vigia)
   const avisos = await p.locator('[data-sileo-toast]').count()
   ok('S8 promesa', APP.titulosPromesa.every((x) => titulos.has(x)) && avisos === 1, { titulosVistos: [...titulos], avisosEnPantalla: avisos })
+  await p.close()
+}
+
+// S9 sonido: sólo en avisos en vivo, con el archivo y volumen esperados; nunca en
+// acciones propias ni con el sonido apagado. (Se espía play(): la sonda no oye.)
+if (APP.avisoEnVivo) {
+  const p = await b.newPage({ viewport: { width: 1440, height: 900 } })
+  await p.addInitScript(() => {
+    window.__plays = []
+    const orig = HTMLMediaElement.prototype.play
+    HTMLMediaElement.prototype.play = function () { window.__plays.push({ src: this.currentSrc || this.src, volumen: this.volume }); return orig.call(this).catch(() => {}) }
+  })
+  p.on('pageerror', (e) => errores.push(e.message))
+  await p.goto(APP.url); await p.waitForSelector(APP.listo)
+  const plays = () => p.evaluate(() => window.__plays.length)
+  await APP.accionConDeshacer(p); await p.waitForTimeout(300)
+  const trasAccionPropia = await plays()
+  await APP.avisoEnVivo(p); await p.waitForTimeout(300)
+  const enVivo = await p.evaluate(() => window.__plays.at(-1) ?? null)
+  const trasEnVivo = await plays()
+  const archivo = enVivo ? await p.evaluate(async (u) => (await fetch(u)).status, enVivo.src) : null
+  await APP.apagarSonido(p)
+  await APP.avisoEnVivo(p); await p.waitForTimeout(300)
+  const trasApagado = await plays()
+  await p.reload(); await p.waitForSelector(APP.listo)
+  const recordado = await p.getByLabel('Sonido de avisos').isChecked()
+  ok('S9 sonido', trasAccionPropia === 0 && trasEnVivo === 1 && APP.sonido.test(enVivo?.src ?? '') && enVivo?.volumen === APP.volumen && archivo === 200 && trasApagado === 1 && recordado === false,
+    { playsTrasAccionPropia: trasAccionPropia, playEnVivo: enVivo, httpArchivo: archivo, playsConSonidoApagado: trasApagado - trasEnVivo, apagadoTrasRecargar: !recordado })
   await p.close()
 }
 

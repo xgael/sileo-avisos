@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { Toaster } from 'sileo'
-import { deshacerUltimo } from '@/lib/avisos'
+import { deshacerUltimo, setSonidoActivo, sonidoActivo, suscribirSonido } from '@/lib/avisos'
 
 /**
  * <Toaster> de Sileo con lo que le falta de fábrica (medido por sileo.mjs):
@@ -36,4 +36,15 @@ export function AvisosToaster() {
   // `theme="system"` invierte la superficie respecto a la página (página clara →
   // aviso oscuro): eso da el contraste. Los tonos se ajustan en sileo.css.
   return <Toaster position="bottom-left" theme="system" />
+}
+
+/** Interruptor del sonido de los avisos en vivo. Ponlo en el menú de la cuenta o
+ *  en ajustes; la preferencia se recuerda por persona. */
+export function InterruptorSonido({ className }: { className?: string }) {
+  const activo = useSyncExternalStore(suscribirSonido, sonidoActivo, () => true)
+  return (
+    <label className={className}>
+      <input type="checkbox" checked={activo} onChange={(e) => setSonidoActivo(e.target.checked)} /> Sonido de avisos
+    </label>
+  )
 }

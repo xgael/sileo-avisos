@@ -9,7 +9,8 @@ description: >-
   título en capitalize, movimiento reducido que no aplica, Deshacer que
   desaparece a los 4 s, botón inalcanzable con teclado, SVG que ensucian el
   lector de pantalla, tonos sin contraste en tema oscuro), un componente listo
-  para copiar y ocho sondas Playwright. Úsala con "agrega Sileo", "pon toasts",
+  para copiar, un sonido de notificación propio y nueve sondas Playwright.
+  Úsala con "agrega Sileo", "pon toasts", "sonido de notificación",
   "avisos con deshacer", "sileo.promise", "el toast sale detrás del drawer",
   "notificaciones en vivo".
 ---
@@ -34,18 +35,19 @@ versión cambia, corre `referencia/sileo.mjs` antes de fiarte de esta lista.
 
 ---
 
-## 1. Integrar (cuatro pasos)
+## 1. Integrar
 
 1. `npm i sileo`
 2. Copia `referencia/avisos.ts` (la capa que fija duración, guarda y atajo) y
-   `referencia/AvisosToaster.tsx` (el `<Toaster>` con sus ajustes). Ajusta el
-   import `@/lib/avisos` a tu alias.
+   `referencia/AvisosToaster.tsx` (el `<Toaster>` con sus ajustes y el
+   `<InterruptorSonido />`). Ajusta el import `@/lib/avisos` a tu alias, y
+   copia `referencia/sileo-gota.mp3` a `public/sonidos/`.
 3. Pega `referencia/sileo.css` en tu CSS global. **No** en un CSS Module: son
    selectores de atributo globales.
 4. Monta `<AvisosToaster />` **una vez** en la raíz del cliente, y usa:
 
 ```tsx
-import { avisar } from '@/lib/avisos'
+import { avisar, avisarEnVivo } from '@/lib/avisos'
 import { sileo } from 'sileo'
 
 // Mutación reversible: aviso con Deshacer (10 s, ⌘Z, idempotente)
@@ -53,6 +55,9 @@ avisar({ titulo: '1 factura eliminada', deshacer: () => restaurar(previas) })
 
 // Aviso simple
 avisar({ titulo: `Folio ${folio} copiado` })
+
+// Evento que no disparó la persona: suena (si no lo apagó) y lleva al registro
+avisarEnVivo({ titulo: `Pago recibido: ${folio}`, descripcion: cliente, ver: { label: 'Ver factura', fn: () => abrir(id) } })
 
 // Operación asíncrona: un solo aviso que cambia de estado
 await sileo.promise(guardar(datos), {
@@ -63,7 +68,7 @@ await sileo.promise(guardar(datos), {
 ```
 
 5. Corre `referencia/sileo.mjs` adaptando el bloque `APP` de arriba (cómo se
-   dispara cada tipo de aviso en tu app). Las ocho sondas deben quedar en verde.
+   dispara cada tipo de aviso en tu app). Las nueve sondas deben quedar en verde.
 
 ## 2. API (verificada contra el paquete)
 
@@ -130,6 +135,22 @@ hacen nada» y parece que el selector está mal.
 - **Un aviso por acción.** Si una acción masiva toca 40 filas, es un aviso
   («40 facturas pagadas») con un Deshacer que revierte las 40, no 40 avisos.
 
+### Sonido: sólo en avisos en vivo
+
+`referencia/sileo-gota.mp3` es el sonido de la casa: **una nota suave tipo
+marimba**, 0.56 s, 7.6 KB, pico −15.8 dBFS, sin energía arriba de 4 kHz (nada
+agudo ni punzante), con entrada y salida suaves para que no haga clic.
+
+- Suena **sólo** con `avisarEnVivo()`: eventos que no disparó la persona. En sus
+  propias acciones ya ve el aviso; un sonido ahí es ruido.
+- Volumen 0.4 y **`<InterruptorSonido />`** (en `AvisosToaster.tsx`) para
+  apagarlo; la preferencia se guarda por persona en `localStorage` y, si el
+  almacenamiento falla, suena.
+- El navegador bloquea el audio hasta la primera interacción con la página: ese
+  `play()` rechazado se ignora (el aviso visual basta). Pruébalo en una pestaña
+  recién abierta.
+- Copia el mp3 a `public/sonidos/` (o ajusta `SONIDO_URL`).
+
 ### Avisos en vivo (apps de administración)
 
 Para eventos que llegan sin que la persona haga nada (una cita nueva, un pago
@@ -140,7 +161,8 @@ recibido, un ticket asignado):
 - **La primera lectura es la línea base**: no dispara avisos (si no, al cargar
   cae una lluvia de avisos de todo lo pendiente).
 - Cada evento nuevo dispara **un** aviso con botón que lleva al registro
-  (`sileo.info({ title, button: { title: 'Ver', onClick: () => abrir(id) } })`).
+  (`avisarEnVivo({ titulo, ver: { label: 'Ver', fn: () => abrir(id) } })`,
+  que además suena y liga el autopilot a la duración).
 - Los eventos por tiempo («cita en menos de 30 min») guardan los ids ya
   avisados en una ref, para no repetirlos en cada sondeo.
 - El mismo sondeo alimenta los contadores del menú (un almacén mínimo con
@@ -149,7 +171,7 @@ recibido, un ticket asignado):
 ## 5. Verificación
 
 `referencia/sileo.mjs`: adapta el bloque `APP` (URL, cómo se dispara cada tipo
-de aviso en tu app) y córrelo con la app levantada. Ocho sondas:
+de aviso en tu app) y córrelo con la app levantada. Nueve sondas:
 
 | ID | Qué mide |
 |---|---|
@@ -161,6 +183,7 @@ de aviso en tu app) y córrelo con la app levantada. Ocho sondas:
 | S6 | contraste título/fondo ≥ 4.5:1 en tema claro y oscuro (convierte oklch a rgb pintando un píxel) |
 | S7 | el botón sigue clicable a 0.5 / 3 / 6 s y 1.5 s antes de expirar |
 | S8 | `sileo.promise`: un solo aviso que pasa de «cargando» a «listo» |
+| S9 | sonido: `play()` sólo en el aviso en vivo, con ese archivo (HTTP 200) y volumen 0.4; nunca en acciones propias ni con el sonido apagado, y apagado sigue apagado tras recargar |
 
 Verificada en ambos sentidos: con los ajustes, **9/9**; quitando el CSS, el
 observador y el autopilot, fallan **7** (S1, S2, S4, S5, S6, S7, S8). Si en tu

@@ -28,6 +28,7 @@ un aviso sale detrás de un drawer.
 | El botón es un `<a>` dentro de un `<button>`, al principio de la página: con teclado no se llega a tiempo | atajo ⌘Z / Ctrl+Z, sin deshacer dos veces |
 | El lector de pantalla lee «Sileo Notification Check…» antes del mensaje | sólo el mensaje |
 | El verde de éxito da 2.04:1 sobre el aviso claro del tema oscuro | 11.07:1 y 5.82:1 |
+| Sin sonido | una gota suave sólo en avisos en vivo, con interruptor por persona |
 
 Y la razón de fondo, que es la que hace fallar los arreglos a medias: su CSS se
 inyecta **al final del `<head>`**, así que un override con la misma
@@ -41,7 +42,8 @@ referencia/
   AvisosToaster.tsx      <Toaster> con los ajustes (observador a11y + atajo ⌘Z)
   avisos.ts              avisar({ titulo, deshacer }): duración, guarda, autopilot
   sileo.css              los ajustes de CSS, cada uno con su porqué
-  sileo.mjs              8 sondas Playwright; adapta el bloque APP a tu app
+  sileo.mjs              9 sondas Playwright; adapta el bloque APP a tu app
+  sileo-gota.mp3         sonido de los avisos en vivo (0.56 s, suave, sin agudos)
 ```
 
 `referencia/` sale de una tabla de facturas de referencia construida con la
@@ -49,4 +51,5 @@ skill [data-table](https://github.com/xgael/data-table).
 
 ## Licencia
 
-MIT
+Código y texto: MIT. El audio `referencia/sileo-gota.mp3` no está bajo MIT: se
+incluye para usarlo con esta skill.
