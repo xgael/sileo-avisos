@@ -1,0 +1,42 @@
+/* ── Sileo (avisos). Su CSS se inyecta en runtime AL FINAL del <head>: a igual
+   especificidad gana él, por eso cada ajuste va con `html` delante. Cada línea
+   corrige algo medido por sileo.mjs (S1–S8). Pégalo en tu CSS global. */
+html [data-sileo-viewport] { z-index: 300; }        /* trae 50: quedaba bajo drawer (200) y modal */
+html [data-sileo-title] { text-transform: none; }   /* trae capitalize: «1 Factura Eliminada» */
+html [data-sileo-button] { text-decoration: none; } /* es un <a>: hereda el subrayado */
+html [data-sileo-viewport][data-theme='dark'] [data-sileo-description] { color: rgb(0 0 0 / 0.68); } /* 0.5 no llega a 4.5:1 */
+
+/* Su regla de movimiento reducido existe pero pierde contra sus propias reglas
+   más específicas: sin !important seguían 0.4–0.6 s de animación. */
+@media (prefers-reduced-motion: reduce) {
+  html [data-sileo-viewport],
+  html [data-sileo-viewport] *,
+  html [data-sileo-viewport] *::before,
+  html [data-sileo-viewport] *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+  }
+}
+
+/* Tonos de estado: los de fábrica son saturados y los mismos en ambos temas
+   (el verde sobre el aviso claro del tema oscuro no llega a 3:1). Página clara →
+   aviso oscuro → tonos claros; página oscura → aviso claro → tonos oscuros.
+   `html:root` y no `:root`: Sileo declara las suyas en :root DESPUÉS. */
+html:root {
+  --sileo-state-success: #9fdcb3;
+  --sileo-state-error: #ffb4a9;
+  --sileo-state-warning: #f5cf85;
+  --sileo-state-info: #a9c7ff;
+  --sileo-state-action: #e4e4e7;
+  --sileo-state-loading: #a1a1aa;
+}
+@media (prefers-color-scheme: dark) {
+  html:root {
+    --sileo-state-success: #1f6b3a;
+    --sileo-state-error: #9a2a1f;
+    --sileo-state-warning: #7a5212;
+    --sileo-state-info: #1d4f91;
+    --sileo-state-action: #3f3f46;
+    --sileo-state-loading: #52525b;
+  }
+}
