@@ -49,6 +49,9 @@ const APP = {
   sonido: /sileo-gota\.mp3$/,
   volumen: 0.4,
   duracionDeshacer: 10_000,
+  /** Cómo pone la APP su tema. Si sigue a prefers-color-scheme, basta el colorScheme del contexto;
+   *  si es una clase elegida por el usuario (localStorage), hay que ponerla aquí. `null` = colorScheme. */
+  ponerTema: null,
 }
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -129,7 +132,8 @@ const expandido = async (p) => { await p.waitForSelector('[data-sileo-button]', 
   await APP.avisoSimple(p)
   await p.waitForTimeout(300)
   const v = await p.evaluate(() => {
-    const live = document.querySelector('[aria-live]')
+    // La región viva DE SILEO: la app puede tener otras (un conteo de tabla con aria-live)
+    const live = document.querySelector('[data-sileo-viewport][aria-live]')
     return { ariaLive: live?.getAttribute('aria-live'), texto: live?.textContent?.slice(0, 80) }
   })
   v.nombreAccesible = (await p.locator('[data-sileo-viewport]').ariaSnapshot()).split('\n')[0]
@@ -146,31 +150,40 @@ const expandido = async (p) => { await p.waitForSelector('[data-sileo-button]', 
     transition: getComputedStyle(document.querySelector('[data-sileo-toast]')).transitionDuration,
     animacionTitulo: getComputedStyle(document.querySelector('[data-sileo-header-inner]')).animationDuration,
   }))
-  ok('S5 movimiento reducido', m.transition.split(',').every((x) => parseFloat(x) === 0) && parseFloat(m.animacionTitulo) === 0, m)
+  // < 1 ms cuenta como sin movimiento: hay reglas globales que usan 0.01 ms a propósito (con 0 no dispara transitionend).
+  ok('S5 movimiento reducido', m.transition.split(',').every((x) => parseFloat(x) < 0.001) && parseFloat(m.animacionTitulo) < 0.001, m)
   await p.close()
 }
 
-// S6 tema: contraste del título contra el fondo del aviso, en claro y oscuro
+// S6 contraste título/fondo en tema claro y oscuro, del aviso simple Y del de
+// Deshacer (estado `action`, el que más se olvida).
 {
   const res = {}
   const lum = (c) => { const m = c.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }); return 0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2] }
+  const medir = (p) => p.evaluate(() => {
+    // oklch/var → rgb real: se pinta un píxel y se lee (parsear el texto del color miente con oklch)
+    const ctx = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true })
+    const rgb = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data; return `rgb(${r}, ${g}, ${b})` }
+    // Capa ACTUAL del último aviso: con una promesa, Sileo conserva un momento la anterior («Guardando…»)
+    const t = [...document.querySelectorAll('[data-sileo-header-inner][data-layer="current"] [data-sileo-title]')].at(-1)
+    const rect = t.closest('[data-sileo-toast]').querySelector('[data-sileo-svg] [fill]:not([fill="none"])')
+    return { estado: t.getAttribute('data-state'), fill: rgb(getComputedStyle(rect).fill), colorTitulo: rgb(getComputedStyle(t).color) }
+  })
+  const ratio = (x) => { const [a, z] = [lum(x.colorTitulo), lum(x.fill)]; return +((Math.max(a, z) + 0.05) / (Math.min(a, z) + 0.05)).toFixed(2) }
   for (const scheme of ['light', 'dark']) {
     const p = await abrir({ colorScheme: scheme })
+    if (APP.ponerTema) { await APP.ponerTema(p, scheme); await p.reload(); await p.waitForSelector(APP.listo) }
     await APP.avisoSimple(p)
     await p.waitForTimeout(400)
-    res[scheme] = await p.evaluate(() => {
-      // oklch/var → rgb real: se pinta un píxel y se lee (parsear el texto del color miente con oklch)
-      const ctx = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true })
-      const rgb = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data; return `rgb(${r}, ${g}, ${b})` }
-      const rect = document.querySelector('[data-sileo-svg] [fill]:not([fill="none"])')
-      return { fill: rgb(getComputedStyle(rect).fill), colorTitulo: rgb(getComputedStyle(document.querySelector('[data-sileo-title]')).color) }
-    })
-    const [a, z] = [lum(res[scheme].colorTitulo), lum(res[scheme].fill)]
-    res[scheme].contraste = +((Math.max(a, z) + 0.05) / (Math.min(a, z) + 0.05)).toFixed(2)
+    const simple = await medir(p); simple.contraste = ratio(simple)
+    await APP.accionConDeshacer(p)
+    await p.waitForTimeout(900)
+    const deshacer = await medir(p); deshacer.contraste = ratio(deshacer)
     if (out) await p.screenshot({ path: `${out}/sileo-${scheme}.png` })
+    res[scheme] = { simple, deshacer }
     await p.close()
   }
-  ok('S6 contraste', res.light.contraste >= 4.5 && res.dark.contraste >= 4.5, res)
+  ok('S6 contraste', ['light', 'dark'].every((t) => res[t].simple.contraste >= 4.5 && res[t].deshacer.contraste >= 4.5), res)
 }
 
 // S7 el Deshacer sigue visible toda la vida del aviso (Sileo colapsa a los 4 s fijos)
@@ -179,7 +192,8 @@ const expandido = async (p) => { await p.waitForSelector('[data-sileo-button]', 
   await APP.accionConDeshacer(p)
   const t = {}
   let previo = 0
-  for (const ms of [500, 3000, 6000, APP.duracionDeshacer - 1500]) {
+  // Ordenados y dentro de la vida del aviso (con 6 s, «1.5 s antes» = 4500 cae antes que 6000).
+  for (const ms of [...new Set([500, 3000, 6000, APP.duracionDeshacer - 1500])].filter((x) => x < APP.duracionDeshacer).sort((a, b) => a - b)) {
     await p.waitForTimeout(ms - previo); previo = ms
     t[`${ms}ms`] = await hit(p, '[data-sileo-button]')
   }

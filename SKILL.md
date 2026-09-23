@@ -180,8 +180,8 @@ de aviso en tu app) y córrelo con la app levantada. Nueve sondas:
 | S3 | deshacer sin ratón: el enlace recibe foco y Enter funciona, y ⌘Z deshace |
 | S4 | región viva `polite` y nombre accesible sin «Sileo Notification» |
 | S5 | con movimiento reducido, transiciones y animaciones en 0 s |
-| S6 | contraste título/fondo ≥ 4.5:1 en tema claro y oscuro (convierte oklch a rgb pintando un píxel) |
-| S7 | el botón sigue clicable a 0.5 / 3 / 6 s y 1.5 s antes de expirar |
+| S6 | contraste título/fondo ≥ 4.5:1 en tema claro y oscuro, del aviso simple **y del de Deshacer** (convierte oklch a rgb pintando un píxel). Si el tema de la app es una clase elegida por el usuario, llena `APP.ponerTema`: el `colorScheme` del navegador no la cambia |
+| S7 | el botón sigue clicable a 0.5 / 3 / 6 s y 1.5 s antes de expirar (ordenados, dentro de la vida del aviso) |
 | S8 | `sileo.promise`: un solo aviso que pasa de «cargando» a «listo» |
 | S9 | sonido: `play()` sólo en el aviso en vivo, con ese archivo (HTTP 200) y volumen 0.4; nunca en acciones propias ni con el sonido apagado, y apagado sigue apagado tras recargar |
 
@@ -189,6 +189,13 @@ Verificada en ambos sentidos: con los ajustes, **9/9**; quitando el CSS, el
 observador y el autopilot, fallan **7** (S1, S2, S4, S5, S6, S7, S8). Si en tu
 app algo pasa sin los ajustes, la sonda está mal adaptada, no la librería
 arreglada.
+
+Trampas de la propia sonda, cobradas en un proyecto real: la app puede tener
+otras regiones `aria-live` (un conteo de tabla) → S4 lee la de Sileo; una regla
+global de movimiento reducido suele usar 0.01 ms a propósito → S5 acepta < 1 ms;
+y con una promesa, Sileo mantiene un momento la capa anterior del título → S6
+lee la capa `current`. En aquel proyecto, S6 destapó que su paleta en `:root`
+**nunca se había aplicado**: el Deshacer salía en el azul de fábrica.
 
 El botón «Deshacer» es un `<a>`: en Playwright se busca con
 `getByRole('link', { name: 'Deshacer' })`, no con `button`. Y hay que esperar
